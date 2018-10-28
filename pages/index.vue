@@ -246,397 +246,385 @@
 </template>
 
 <script lang="ts">
-  import Vue from 'vue'
-  import Storage from 'vue-ls'
-  import VueClipboard from 'vue-clipboard2'
+  import {Vue, Component} from 'nuxt-property-decorator'
+  import Card from '~/components/card.vue'
 
-  Vue.use(Storage)
-  Vue.use(VueClipboard)
-  
-  export default {
-    data: () => ({
-      version: 'v2.1.0',
-      mainPager: 1,
-      mainPagerVisible: null,
-      kousuuTab: null,
-      settingTab: null,
-      jobStartTime: '9:00',
-      scheduleInputs: {
-        category: null,
-        detail: null,
-      },
-      categoryInputs: {
-        code: null,
-        name: null
-      },
-      multiCategoryInputs: {
-        name: null,
-        category1: null,
-        category2: null,
-        category3: null
-      },
-      rest: {
-        startTime: '12:00',
-        endTime: '13:00'
-      },
-      categories: [
-        //{
-        //  code: null,
-        //  name: null
-        //}
-      ],
-      multiCategories: [
-        //{
-        //  name: null,
-        //  category1: null,
-        //  category2: null,
-        //  category3: null
-        //}
-      ],
-      schedules: [
-        //{
-        //  startTime: null,
-        //  endTime: null,
-        //  category: null,
-        //  detail: null
-        //}
-      ]
-    }),
-    methods: {
-      clearScheduleInputs: function() {
-        this.scheduleInputs.category = ''
-        this.scheduleInputs.detail = ''
-      },
-      pushSchedule: function() {
-        var category = this.scheduleInputs.category
-        var detail = this.scheduleInputs.detail
-        if (!category || !detail) return
+  interface MultiCategoryInput {
+    name: string;
+    category1: string;
+    category2: string;
+    category3: string;
+  }
 
-        var lastSchedule = this.schedules[this.schedules.length - 1]
-        var now = new Date()
-        var endTime = now.getHours() + ':' + (now.getMinutes() < 10 ? '0' : '') + now.getMinutes()
-        if (lastSchedule !== undefined && lastSchedule.category === category && lastSchedule.detail === detail) {
-          lastSchedule.endTime = endTime
-          return
+  interface Category {
+      code: string;
+      name: string;
+  }
+
+  @Component({})
+  export default class app extends Vue {
+    version: string = 'v2.1.0';
+    mainPager: number = 1;
+    mainPagerVisible: boolean = true;
+    kousuuTab: any = null;
+    settingTab: any = null;
+    jobStartTime: string = '9:00';
+    scheduleInputs = {
+      category: '',
+      detail: ''
+    };
+    categoryInputs: Category = {code: '', name: ''};
+    multiCategoryInputs: MultiCategoryInput = {
+      name: '', category1: '', category2: '', category3: ''
+    };
+    rest: {
+      startTime: string,
+      endTime: string
+    } = {
+      startTime: '12:00',
+      endTime: '13:00'
+    };
+    categories: Category[] = [];
+    multiCategories: MultiCategoryInput[] = [];
+    schedules: {
+      startTime: string,
+      endTime: string,
+      category: string,
+      detail: string
+    }[] = [];
+
+    clearScheduleInputs() {
+      this.scheduleInputs.category = ''
+      this.scheduleInputs.detail = ''
+    }
+    pushSchedule() {
+      var category = this.scheduleInputs.category
+      var detail = this.scheduleInputs.detail
+      if (!category || !detail) return
+
+      var lastSchedule = this.schedules[this.schedules.length - 1]
+      var now = new Date()
+      var endTime = now.getHours() + ':' + (now.getMinutes() < 10 ? '0' : '') + now.getMinutes()
+      if (lastSchedule !== undefined && lastSchedule.category === category && lastSchedule.detail === detail) {
+        lastSchedule.endTime = endTime
+        return
+      }
+
+      var startTime = this.schedules.length ? lastSchedule.endTime : this.jobStartTime
+      this.schedules.push({
+        startTime: startTime,
+        endTime: endTime,
+        category: category,
+        detail: detail
+      })
+
+      this.scheduleInputs.detail = ''
+      Vue.ls.set('schedules', this.schedules)
+    }
+    swapSchedules(event, index) {
+      var tmp = Object.assign({}, this.schedules[index])
+      this.schedules[index].category = this.schedules[index + 1].category
+      this.schedules[index].detail = this.schedules[index + 1].detail
+      this.schedules[index + 1].category = tmp.category
+      this.schedules[index + 1].detail = tmp.detail
+    }
+    copySchedule(event, index) {
+      this.scheduleInputs.category = this.schedules[index].category
+      this.scheduleInputs.detail = this.schedules[index].detail
+    }
+    deleteSchedule(event, index) {
+      this.schedules.splice(index, 1)
+      Vue.ls.set('schedules', this.schedules)
+    }
+    fixEndTime(event, index) {
+      this.saveSchedules()
+      if (index !== this.schedules.length - 1)
+        this.schedules[index + 1].startTime = this.schedules[index].endTime
+      Vue.ls.set('schedules', this.schedules)
+    }
+    saveSchedules() {
+      var backup = Vue.ls.get('schedules', [])
+      for (var idx in this.schedules) {
+        if (!this.validateTime(this.schedules[idx].startTime)) {
+          this.schedules[idx].startTime = backup[idx].startTime
         }
+        if (!this.validateTime(this.schedules[idx].endTime)) {
+          this.schedules[idx].endTime = backup[idx].endTime
+        }
+      }
+      Vue.ls.set('schedules', this.schedules)
+    }
+    pushCategory() {
+      if (!this.categoryInputs.name) return
+      this.categories.push(Object.assign({}, this.categoryInputs))
+      Vue.ls.set('categories', this.categories)
 
-        var startTime = this.schedules.length ? lastSchedule.endTime : this.jobStartTime
-        this.schedules.push({
-          startTime: startTime,
-          endTime: endTime,
-          category: category,
-          detail: detail
+      this.categoryInputs.name = ''
+    }
+    pushMultiCategory() {
+      if (!this.multiCategoryInputs.name) return
+      if (!this.multiCategoryInputs.category1) {
+        if (this.multiCategoryInputs.category2) {
+          this.multiCategoryInputs.category1 = this.multiCategoryInputs.category2
+          this.multiCategoryInputs.category2 = ''
+        }
+        else if (this.multiCategoryInputs.category3) {
+          this.multiCategoryInputs.category1 = this.multiCategoryInputs.category3
+          this.multiCategoryInputs.category3 = ''
+        }
+      }
+      if (!this.multiCategoryInputs.category2) {
+        if (this.multiCategoryInputs.category3) {
+          this.multiCategoryInputs.category2 = this.multiCategoryInputs.category3
+          this.multiCategoryInputs.category3 = ''
+        }
+      }
+      if (!this.multiCategoryInputs.category1) return
+      this.multiCategories.push(Object.assign({}, this.multiCategoryInputs))
+      Vue.ls.set('multiCategories', this.multiCategories)
+
+      this.multiCategoryInputs.name = ''
+      this.multiCategoryInputs.category1 = ''
+      this.multiCategoryInputs.category2 = ''
+      this.multiCategoryInputs.category3 = ''
+    }
+    swapCategories(event, index) {
+      var tmp = Object.assign({}, this.categories[index])
+      this.categories.splice(index, 1)
+      this.categories.splice(index + 1, 0, tmp)
+      Vue.ls.set('categories', this.categories)
+    }
+    swapMultiCategories(event, index) {
+      var tmp = Object.assign({}, this.multiCategories[index])
+      this.multiCategories.splice(index, 1)
+      this.multiCategories.splice(index + 1, 0, tmp)
+      Vue.ls.set('multiCategories', this.multiCategories)
+    }
+    deleteCategory(event, index) {
+      this.categories.splice(index, 1)
+      Vue.ls.set('categories', this.categories)
+    }
+    changeCode() {
+      Vue.ls.set('categories', this.categories)
+    }
+    changeCategoryName(event, index) {
+      var categoryName = this.categories[index].name
+
+      if (categoryName === '') {
+        this.categories[index].name = Vue.ls.get('categories', [])[index].name
+        return
+      }
+
+      var oldCategoryName = Vue.ls.get('categories', [])[index].name
+      for (var idx in this.schedules) {
+        if (this.schedules[idx].category === oldCategoryName) {
+          this.schedules[idx].category = categoryName
+        }
+      }
+      for (var idx in this.multiCategories) {
+        if (this.multiCategories[idx].category1 === oldCategoryName)
+          this.multiCategories[idx].category1 = categoryName
+        if (this.multiCategories[idx].category2 === oldCategoryName)
+          this.multiCategories[idx].category2 = categoryName
+        if (this.multiCategories[idx].category3 === oldCategoryName)
+          this.multiCategories[idx].category3 = categoryName
+      }
+      Vue.ls.set('categories', this.categories)
+    }
+    changeMultiCategoryName(event, index) {
+      var categoryName = this.multiCategories[index].name
+
+      if (categoryName === '') {
+        this.multiCategories[index].name = Vue.ls.get('multiCategories', [])[index].name
+        return
+      }
+
+      var oldCategoryName = Vue.ls.get('multiCategories', [])[index].name
+      for (var idx in this.schedules) {
+        if (this.schedules[idx].category === oldCategoryName) {
+          this.schedules[idx].category = categoryName
+        }
+      }
+      Vue.ls.set('multiCategories', this.multiCategories)
+    }
+    changeMultiCategory(event, index) {
+      var category1 = this.multiCategories[index].category1
+      var category2 = this.multiCategories[index].category2
+      var category3 = this.multiCategories[index].category3
+
+      var oldCategories = Vue.ls.get('multiCategories', [])
+      var oldCategory1 = oldCategories.category1
+      var oldCategory2 = oldCategories.category2
+      var oldCategory3 = oldCategories.category3
+      if (!category1 && !category2 && !category3) {
+        this.multiCategories[index].category1 = oldCategory1
+        this.multiCategories[index].category2 = oldCategory2
+        this.multiCategories[index].category3 = oldCategory3
+      }
+
+      Vue.ls.set('multiCategories', this.multiCategories)
+    }
+    getTimeCount(time) {
+      var times = time.split(':');
+      return Number(times[0]) * 60 + Number(times[1]);
+    }
+    validateTime(time) {
+      if (time.indexOf('.') != -1) return false
+
+      var vals = time.split(':')
+      if (vals.length !== 2) return false
+      if (!isFinite(vals[0]) || !isFinite(vals[1])) return false
+      if (String(vals[0]).length > 2 || String(vals[1]).length > 2) return false
+
+      var count = this.getTimeCount(time);
+      if (count < 0 || count > 60 * 24) return false
+      if (vals[1] < 0 || vals[1] >= 60) return false
+
+      return true;
+    }
+    getTimeRange(startTime, endTime) {
+      var startCount = this.getTimeCount(startTime);
+      var endCount = this.getTimeCount(endTime);
+      if (startCount > endCount) {
+        endCount = endCount + 24 * 60;
+      }
+
+      // 休憩時間の計算
+      var restCount = 0;
+      var restStartCount = this.getTimeCount(this.rest.startTime);
+      var restEndCount = this.getTimeCount(this.rest.endTime);
+      if (restStartCount > restEndCount) {
+        restEndCount = restEndCount + 24 * 60;
+      }
+      if (endCount <= restStartCount || restEndCount <= startCount) {
+        restCount = 0;
+      } else if (startCount <= restStartCount && restEndCount <= endCount) {
+        restCount = restEndCount - restStartCount;
+      } else if (startCount <= restStartCount && endCount <= restEndCount) {
+        restCount = endCount - restStartCount;
+      } else if (restStartCount <= startCount && restEndCount <= endCount) {
+        restCount = restEndCount - startCount;
+      } else if (restStartCount <= startCount && endCount <= restEndCount) {
+        restCount = endCount - startCount;
+      }
+
+      return endCount - startCount - restCount;
+    }
+    getCategoryIndex(name) {
+      for (var i in this.categories) {
+        if (name === this.categories[i].name) return i
+      }
+      return -1
+    }
+    getMultiCategoryIndex(name) {
+      for (var i in this.multiCategories) {
+        if (name === this.multiCategories[i].name) return i
+      }
+      return -1
+    }
+    getAliveTime(minute) {
+      var hour = Math.floor(minute / 60)
+      minute -= hour * 60
+      return hour + '.' + (minute < 10 ? '0' : '') + minute
+    }
+    getSetText(set) {
+      var str = '';
+      for (var tmp of set) {
+        str = str + tmp + '\n'
+      }
+      return str
+    }
+    saveSettings() {
+      if (!this.validateTime(this.jobStartTime)) {
+        this.jobStartTime = Vue.ls.get('jobStartTime', '9:00')
+        return
+      }
+      if (!this.validateTime(this.rest.startTime)) {
+        this.rest.startTime = Vue.ls.get('rest').startTime
+        return
+      }
+      if (!this.validateTime(this.rest.endTime)) {
+        this.rest.endTime = Vue.ls.get('rest').endTime
+        return
+      }
+      Vue.ls.set('jobStartTime', this.jobStartTime)
+      Vue.ls.set('rest', this.rest)
+    }
+
+    get categoryNames() {
+      const arr: string[] = []
+      for (var category of this.categories) {
+        arr.push(category.name)
+      }
+      return arr;
+    }
+    get categoryNamesWithMulti(): string[] {
+      const arr: string[] = []
+      for (const category of this.categories) {
+        arr.push(category.name)
+      }
+      for (const category of this.multiCategories) {
+        arr.push(category.name)
+      }
+      return arr;
+    }
+    get summaries() {
+      const summaries: {
+          code: string;
+          category: string;
+          time: number;
+          detailSet: Set<any>;
+      }[] = []
+      for (var category of this.categories) {
+        summaries.push({
+          code: category.code,
+          category: category.name,
+          time: 0,
+          detailSet: new Set()
         })
-
-        this.scheduleInputs.detail = ''
-        Vue.ls.set('schedules', this.schedules)
-      },
-      swapSchedules: function(event, index) {
-        var tmp = Object.assign({}, this.schedules[index])
-        this.schedules[index].category = this.schedules[index + 1].category
-        this.schedules[index].detail = this.schedules[index + 1].detail
-        this.schedules[index + 1].category = tmp.category
-        this.schedules[index + 1].detail = tmp.detail
-      },
-      copySchedule: function(event, index) {
-        this.scheduleInputs.category = this.schedules[index].category
-        this.scheduleInputs.detail = this.schedules[index].detail
-      },
-      deleteSchedule: function(event, index) {
-        this.schedules.splice(index, 1)
-        Vue.ls.set('schedules', this.schedules)
-      },
-      fixEndTime: function(event, index) {
-        this.saveSchedules()
-        if (index !== this.schedules.length - 1)
-          this.schedules[index + 1].startTime = this.schedules[index].endTime
-        Vue.ls.set('schedules', this.schedules)
-      },
-      saveSchedules: function() {
-        var backup = Vue.ls.get('schedules', [])
-        for (var idx in this.schedules) {
-          if (!this.validateTime(this.schedules[idx].startTime)) {
-            this.schedules[idx].startTime = backup[idx].startTime
-          }
-          if (!this.validateTime(this.schedules[idx].endTime)) {
-            this.schedules[idx].endTime = backup[idx].endTime
-          }
-        }
-        Vue.ls.set('schedules', this.schedules)
-      },
-      pushCategory: function() {
-        if (!this.categoryInputs.name) return
-        this.categories.push(Object.assign({}, this.categoryInputs))
-        Vue.ls.set('categories', this.categories)
-
-        this.categoryInputs.name = ''
-      },
-      pushMultiCategory: function() {
-        if (!this.multiCategoryInputs.name) return
-        if (!this.multiCategoryInputs.category1) {
-          if (this.multiCategoryInputs.category2) {
-            this.multiCategoryInputs.category1 = this.multiCategoryInputs.category2
-            this.multiCategoryInputs.category2 = null
-          }
-          else if (this.multiCategoryInputs.category3) {
-            this.multiCategoryInputs.category1 = this.multiCategoryInputs.category3
-            this.multiCategoryInputs.category3 = null
-          }
-        }
-        if (!this.multiCategoryInputs.category2) {
-          if (this.multiCategoryInputs.category3) {
-            this.multiCategoryInputs.category2 = this.multiCategoryInputs.category3
-            this.multiCategoryInputs.category3 = null
-          }
-        }
-        if (!this.multiCategoryInputs.category1) return
-        this.multiCategories.push(Object.assign({}, this.multiCategoryInputs))
-        Vue.ls.set('multiCategories', this.multiCategories)
-
-        this.multiCategoryInputs.name = ''
-        this.multiCategoryInputs.category1 = ''
-        this.multiCategoryInputs.category2 = ''
-        this.multiCategoryInputs.category3 = ''
-      },
-      swapCategories: function(event, index) {
-        var tmp = Object.assign({}, this.categories[index])
-        this.categories.splice(index, 1)
-        this.categories.splice(index + 1, 0, tmp)
-        Vue.ls.set('categories', this.categories)
-      },
-      swapMultiCategories: function(event, index) {
-        var tmp = Object.assign({}, this.multiCategories[index])
-        this.multiCategories.splice(index, 1)
-        this.multiCategories.splice(index + 1, 0, tmp)
-        Vue.ls.set('multiCategories', this.multiCategories)
-      },
-      deleteCategory: function(event, index) {
-        this.categories.splice(index, 1)
-        Vue.ls.set('categories', this.categories)
-      },
-      changeCode: function() {
-        Vue.ls.set('categories', this.categories)
-      },
-      changeCategoryName: function(event, index) {
-        var categoryName = this.categories[index].name
-
-        if (categoryName === '') {
-          this.categories[index].name = Vue.ls.get('categories', [])[index].name
-          return
-        }
-
-        var oldCategoryName = Vue.ls.get('categories', [])[index].name
-        for (var idx in this.schedules) {
-          if (this.schedules[idx].category === oldCategoryName) {
-            this.schedules[idx].category = categoryName
-          }
-        }
-        for (var idx in this.multiCategories) {
-          if (this.multiCategories[idx].category1 === oldCategoryName)
-            this.multiCategories[idx].category1 = categoryName
-          if (this.multiCategories[idx].category2 === oldCategoryName)
-            this.multiCategories[idx].category2 = categoryName
-          if (this.multiCategories[idx].category3 === oldCategoryName)
-            this.multiCategories[idx].category3 = categoryName
-        }
-        Vue.ls.set('categories', this.categories)
-      },
-      changeMultiCategoryName: function(event, index) {
-        var categoryName = this.multiCategories[index].name
-
-        if (categoryName === '') {
-          this.multiCategories[index].name = Vue.ls.get('multiCategories', [])[index].name
-          return
-        }
-
-        var oldCategoryName = Vue.ls.get('multiCategories', [])[index].name
-        for (var idx in this.schedules) {
-          if (this.schedules[idx].category === oldCategoryName) {
-            this.schedules[idx].category = categoryName
-          }
-        }
-        Vue.ls.set('multiCategories', this.multiCategories)
-      },
-      changeMultiCategory: function(event, index) {
-        var category1 = this.multiCategories[index].category1
-        var category2 = this.multiCategories[index].category2
-        var category3 = this.multiCategories[index].category3
-
-        var oldCategories = Vue.ls.get('multiCategories', [])
-        var oldCategory1 = oldCategories.category1
-        var oldCategory2 = oldCategories.category2
-        var oldCategory3 = oldCategories.category3
-        if (!category1 && !category2 && !category3) {
-          this.multiCategories[index].category1 = oldCategory1
-          this.multiCategories[index].category2 = oldCategory2
-          this.multiCategories[index].category3 = oldCategory3
-        }
-
-        Vue.ls.set('multiCategories', this.multiCategories)
-      },
-      getTimeCount: function(time) {
-        var times = time.split(':');
-        return Number(times[0]) * 60 + Number(times[1]);
-      },
-      validateTime: function(time) {
-        if (time.indexOf('.') != -1) return false
-
-        var vals = time.split(':')
-        if (vals.length !== 2) return false
-        if (!isFinite(vals[0]) || !isFinite(vals[1])) return false
-        if (String(vals[0]).length > 2 || String(vals[1]).length > 2) return false
-
-        var count = this.getTimeCount(time);
-        if (count < 0 || count > 60 * 24) return false
-        if (vals[1] < 0 || vals[1] >= 60) return false
-
-        return true;
-      },
-      getTimeRange(startTime, endTime) {
-        var startCount = this.getTimeCount(startTime);
-        var endCount = this.getTimeCount(endTime);
-        if (startCount > endCount) {
-          endCount = endCount + 24 * 60;
-        }
-
-        // 休憩時間の計算
-        var restCount = 0;
-        var restStartCount = this.getTimeCount(this.rest.startTime);
-        var restEndCount = this.getTimeCount(this.rest.endTime);
-        if (restStartCount > restEndCount) {
-          restEndCount = restEndCount + 24 * 60;
-        }
-        if (endCount <= restStartCount || restEndCount <= startCount) {
-          restCount = 0;
-        } else if (startCount <= restStartCount && restEndCount <= endCount) {
-          restCount = restEndCount - restStartCount;
-        } else if (startCount <= restStartCount && endCount <= restEndCount) {
-          restCount = endCount - restStartCount;
-        } else if (restStartCount <= startCount && restEndCount <= endCount) {
-          restCount = restEndCount - startCount;
-        } else if (restStartCount <= startCount && endCount <= restEndCount) {
-          restCount = endCount - startCount;
-        }
-
-        return endCount - startCount - restCount;
-      },
-      getCategoryIndex: function(name) {
-        for (var i in this.categories) {
-          if (name === this.categories[i].name) return i
-        }
-        return -1
-      },
-      getMultiCategoryIndex: function(name) {
-        for (var i in this.multiCategories) {
-          if (name === this.multiCategories[i].name) return i
-        }
-        return -1
-      },
-      getAliveTime: function(minute) {
-        var hour = Math.floor(minute / 60)
-        minute -= hour * 60
-        return hour + '.' + (minute < 10 ? '0' : '') + minute
-      },
-      getSetText: function(set) {
-        var str = '';
-        for (var tmp of set) {
-          str = str + tmp + '\n'
-        }
-        return str
-      },
-      saveSettings: function() {
-        if (!this.validateTime(this.jobStartTime)) {
-          this.jobStartTime = Vue.ls.get('jobStartTime', '9:00')
-          return
-        }
-        if (!this.validateTime(this.rest.startTime)) {
-          this.rest.startTime = Vue.ls.get('rest').startTime
-          return
-        }
-        if (!this.validateTime(this.rest.endTime)) {
-          this.rest.endTime = Vue.ls.get('rest').endTime
-          return
-        }
-        Vue.ls.set('jobStartTime', this.jobStartTime)
-        Vue.ls.set('rest', this.rest)
       }
-    },
-    computed: {
-      categoryNames: function() {
-        const arr: string[] = []
-        for (var category of this.categories) {
-          arr.push(category.name)
-        }
-        return arr;
-      },
-      categoryNamesWithMulti: function() {
-        const arr: string[] = []
-        for (var category of this.categories) {
-          arr.push(category.name)
-        }
-        for (var category of this.multiCategories) {
-          arr.push(category.name)
-        }
-        return arr;
-      },
-      summaries: function() {
-        const summaries: {
-            code: string;
-            category: string;
-            time: number;
-            detailSet: Set<any>;
-        }[] = []
-        for (var category of this.categories) {
-          summaries.push({
-            code: category.code,
-            category: category.name,
-            time: 0,
-            detailSet: new Set()
-          })
-        }
 
-        for (var schedule of this.schedules) {
-          var idx = this.getCategoryIndex(schedule.category)
-          if (idx !== -1) {
-            summaries[idx].time = summaries[idx].time + this.getTimeRange(schedule.startTime, schedule.endTime)
-            if (!summaries[idx].detailSet.has(schedule.detail) && schedule.detail !== '') {
-              summaries[idx].detailSet.add(schedule.detail)
+      for (var schedule of this.schedules) {
+        var idx = this.getCategoryIndex(schedule.category)
+        if (idx !== -1) {
+          summaries[idx].time = summaries[idx].time + this.getTimeRange(schedule.startTime, schedule.endTime)
+          if (!summaries[idx].detailSet.has(schedule.detail) && schedule.detail !== '') {
+            summaries[idx].detailSet.add(schedule.detail)
+          }
+        } else {
+          idx = this.getMultiCategoryIndex(schedule.category)
+          if (idx === -1) continue
+
+          var multiCategory = this.multiCategories[idx]
+          var categoryNum;
+          if (!multiCategory.category2) categoryNum = 1
+          else if (!multiCategory.category3) categoryNum = 2
+          else categoryNum = 3
+
+          var categoryNames = [
+            multiCategory.category1,
+            multiCategory.category2,
+            multiCategory.category3
+          ]
+
+          var time = this.getTimeRange(schedule.startTime, schedule.endTime)
+
+          for (var i = 0; i < categoryNum; i++) {
+            var cidx = this.getCategoryIndex(categoryNames[i])
+            if (cidx === -1) continue
+            var ptime = Math.floor(time / (categoryNum - i))
+            summaries[cidx].time = summaries[cidx].time + ptime
+            if (!summaries[cidx].detailSet.has(schedule.detail) && schedule.detail !== '') {
+              summaries[cidx].detailSet.add(schedule.detail)
             }
-          } else {
-            idx = this.getMultiCategoryIndex(schedule.category)
-            if (idx === -1) continue
-
-            var multiCategory = this.multiCategories[idx]
-            var categoryNum;
-            if (!multiCategory.category2) categoryNum = 1
-            else if (!multiCategory.category3) categoryNum = 2
-            else categoryNum = 3
-
-            var categoryNames = [
-              multiCategory.category1,
-              multiCategory.category2,
-              multiCategory.category3
-            ]
-
-            var time = this.getTimeRange(schedule.startTime, schedule.endTime)
-
-            for (var i = 0; i < categoryNum; i++) {
-              var cidx = this.getCategoryIndex(categoryNames[i])
-              if (cidx === -1) continue
-              var ptime = Math.floor(time / (categoryNum - i))
-              summaries[cidx].time = summaries[cidx].time + ptime
-              if (!summaries[cidx].detailSet.has(schedule.detail) && schedule.detail !== '') {
-                summaries[cidx].detailSet.add(schedule.detail)
-              }
-              time = time - ptime
-            }
+            time = time - ptime
           }
         }
-
-        return summaries
       }
-    },
-    mounted: function() {
+      return summaries
+    }
+
+    mounted() {
       this.schedules = Vue.ls.get('schedules', [])
       this.categories = Vue.ls.get('categories', [
         {

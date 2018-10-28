@@ -12,6 +12,6 @@ declare module '*.vue' {
 }
 
 interface VueLs {
-  set: (name: string, object: object, expire?: number) => void;
+  set: (name: string, object: unknown, expire?: number) => void;
   get: (name: string, def?: unknown) => unknown;
 }
